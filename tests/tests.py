@@ -2,10 +2,10 @@ import unittest
 from pstats import Stats
 import cProfile
 
-from crypto_balancer.simple_balancer import SimpleBalancer
+from crypto_balancer.rebalancer import SimpleBalancer
 from crypto_balancer.portfolio import Portfolio
 from crypto_balancer.dummy_exchange import DummyExchange
-from crypto_balancer.executor import Executor
+from crypto_balancer.executor import TradeExecutor
 from crypto_balancer.order import Order
 
 import sys
@@ -225,14 +225,15 @@ class test_Portfolio(unittest.TestCase):
         final_base = {}
         final_targets = {}
         total_base = 0
-        for cur in current:
-            symbol = "{}/{}".format(cur, portfolio.quote_currency)
-            final_base[cur] = current[cur] * exchange.rates[symbol]['mid']
-            final_base[cur] += portfolio.differences_quote[cur]
-            total_base += final_base[cur]
+        for currency in current:
+            symbol = "{}/{}".format(currency, portfolio.quote_currency)
+            final_base[currency] = current[currency] * \
+                exchange.rates[symbol]['mid']
+            final_base[currency] += portfolio.differences_quote[currency]
+            total_base += final_base[currency]
 
-        for cur in final_base:
-            final_targets[cur] = (final_base[cur] / total_base) * 100
+        for currency in final_base:
+            final_targets[currency] = (final_base[currency] / total_base) * 100
 
         self.assertEqual(targets, final_targets)
 
@@ -261,14 +262,15 @@ class test_Portfolio(unittest.TestCase):
         final_base = {}
         final_targets = {}
         total_base = 0
-        for cur in current:
-            symbol = "{}/{}".format(cur, portfolio.quote_currency)
-            final_base[cur] = current[cur] * exchange.rates[symbol]['mid']
-            final_base[cur] += portfolio.differences_quote[cur]
-            total_base += final_base[cur]
+        for currency in current:
+            symbol = "{}/{}".format(currency, portfolio.quote_currency)
+            final_base[currency] = current[currency] * \
+                exchange.rates[symbol]['mid']
+            final_base[currency] += portfolio.differences_quote[currency]
+            total_base += final_base[currency]
 
-        for cur in final_base:
-            final_targets[cur] = (final_base[cur] / total_base) * 100
+        for currency in final_base:
+            final_targets[currency] = (final_base[currency] / total_base) * 100
 
         self.assertEqual(targets, final_targets)
 
@@ -465,14 +467,14 @@ class test_SimpleBalancer(unittest.TestCase):
 
         # Test that the final amounts are in proportion to the targets
         base_amounts = {}
-        for cur in res['proposed_portfolio'].currencies:
-            pair = "{}/{}".format(cur, base)
-            base_amounts[cur] = \
-                res['proposed_portfolio'].balances[cur] * rates[pair]
+        for currency in res['proposed_portfolio'].currencies:
+            pair = "{}/{}".format(currency, base)
+            base_amounts[currency] = \
+                res['proposed_portfolio'].balances[currency] * rates[pair]
         total_base = sum(base_amounts.values())
-        for cur in targets:
-            self.assertAlmostEqual(targets[cur],
-                                   (base_amounts[cur] / total_base) * 100)
+        for currency in targets:
+            self.assertAlmostEqual(targets[currency],
+                                   (base_amounts[currency] / total_base) * 100)
 
     def test_real2a(self):
 
@@ -508,14 +510,14 @@ class test_SimpleBalancer(unittest.TestCase):
 
         # Test that the final amounts are in proportion to the targets
         base_amounts = {}
-        for cur in res['proposed_portfolio'].currencies:
-            pair = "{}/{}".format(cur, base)
-            base_amounts[cur] = \
-                res['proposed_portfolio'].balances[cur] * rates[pair]
+        for currency in res['proposed_portfolio'].currencies:
+            pair = "{}/{}".format(currency, base)
+            base_amounts[currency] = \
+                res['proposed_portfolio'].balances[currency] * rates[pair]
         total_base = sum(base_amounts.values())
-        for cur in targets:
-            self.assertAlmostEqual(targets[cur],
-                                   (base_amounts[cur] / total_base) * 100)
+        for currency in targets:
+            self.assertAlmostEqual(targets[currency],
+                                   (base_amounts[currency] / total_base) * 100)
 
     def test_real2a_cheap(self):
 
@@ -544,7 +546,7 @@ class test_SimpleBalancer(unittest.TestCase):
         # Test the orders we get are correct
         expected = [Order('XLM/XRP', 'BUY', 6.551686481727605, 0.283366),
                     Order('XRP/BTC', 'BUY', 28.11529866566897, 8.102e-05),
-                    Order('XRP/ETH', 'SELL', 13.236589350292975, 0.00217366)] 
+                    Order('XRP/ETH', 'SELL', 13.236589350292975, 0.00217366)]
         self.assertEqual(res['orders'], expected)
 
     def test_real2a_cheaper(self):
@@ -575,7 +577,6 @@ class test_SimpleBalancer(unittest.TestCase):
 
         self.assertTrue(res2['total_fee'] < res1['total_fee'])
 
-        
     def test_real2a_max_orders(self):
 
         targets = {'XRP': 40,
@@ -636,10 +637,10 @@ class test_SimpleBalancer(unittest.TestCase):
 
         # Test that the final amounts are in proportion to the targets
         base_amounts = {}
-        for cur in res['proposed_portfolio'].currencies:
-            pair = "{}/{}".format(cur, base)
-            base_amounts[cur] = \
-                res['proposed_portfolio'].balances[cur] * rates[pair]
+        for currency in res['proposed_portfolio'].currencies:
+            pair = "{}/{}".format(currency, base)
+            base_amounts[currency] = \
+                res['proposed_portfolio'].balances[currency] * rates[pair]
         total_base = sum(base_amounts.values())
 
         expected_targets = {'XRP': 51.56,
@@ -648,9 +649,9 @@ class test_SimpleBalancer(unittest.TestCase):
                             'ETH': 10.00,
                             'USDT': 10.00}
 
-        for cur in targets:
-            self.assertAlmostEqual(expected_targets[cur],
-                                   (base_amounts[cur] / total_base) * 100,
+        for currency in targets:
+            self.assertAlmostEqual(expected_targets[currency],
+                                   (base_amounts[currency] / total_base) * 100,
                                    1)
 
     def test_badpair2(self):
@@ -756,7 +757,7 @@ class test_Executor(unittest.TestCase):
         exchange = DummyExchange(targets.keys(), current, rates, fee)
         portfolio = Portfolio.make_portfolio(targets, exchange)
         balancer = SimpleBalancer()
-        executor = Executor(portfolio, exchange, balancer)
+        executor = TradeExecutor(portfolio, exchange, balancer)
         return executor
 
     def test_threshold_inbalance(self):
@@ -855,7 +856,7 @@ class test_Executor(unittest.TestCase):
         exchange = DummyExchange(targets.keys(), current, rates, 0.001)
         portfolio = Portfolio.make_portfolio(targets, exchange)
         balancer = SimpleBalancer()
-        executor = Executor(portfolio, exchange, balancer)
+        executor = TradeExecutor(portfolio, exchange, balancer)
 
         res = executor.run(force=True, trade=False)
 
@@ -883,7 +884,7 @@ class test_Executor(unittest.TestCase):
         exchange = DummyExchange(targets.keys(), current, rates, 0.001)
         portfolio = Portfolio.make_portfolio(targets, exchange)
         balancer = SimpleBalancer()
-        executor = Executor(portfolio, exchange, balancer)
+        executor = TradeExecutor(portfolio, exchange, balancer)
 
         res = executor.run(force=True, trade=True)
 
